@@ -1,0 +1,1 @@
+from ligent.server.server import serve
