@@ -100,14 +100,11 @@ def play_exec(executable_path, use_unity_env=False, skip_if_port_in_use=True):
             server = Process(target=serve)
             server.start()
             start_server_fork = True
-    if not executable_path:
-        from huggingface_hub import snapshot_download
-        executable_path = snapshot_download(repo_id="chengzl18/ligent-windows", cache_dir='.game_client')
     time.sleep(0.5)
     if use_unity_env:
         unity_env = UnityEnvironment(executable_path)
     else:
-        process = subprocess.Popen(os.path.join(executable_path, "LIGENT.exe"))  # Launch the executable file
+        process = subprocess.Popen(os.path.join(executable_path))  # Launch the executable file
 
     try:
         while True:

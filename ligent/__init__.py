@@ -27,7 +27,7 @@ def main():
         "--scenes",
         default="",
         action="store",
-        help="use pre-defined scene files under a directory rather than instantly generated scene files",
+        help="user pre-defined scene files under a directory rather than instantly generated scene files",
     )
     parser.add_argument(
         "--env_path",

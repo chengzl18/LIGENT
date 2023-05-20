@@ -97,7 +97,7 @@ class UnityToGymWrapper(gym.Env):
             )
 
         # Check for number of agents in scene.
-        self._env.reset()
+        # self._env.reset() # LIGENT: Removed. LIGENT client itself will reset the environmont on startup, reset here may cause unpredictable behavior 
         decision_steps, _ = self._env.get_steps(self.name)
         self._check_agents(len(decision_steps))
         self._previous_decision_step = decision_steps

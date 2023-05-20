@@ -9,11 +9,8 @@ import logging
 
 
 class Environment:
-    def __init__(self, path: str = "") -> None:
-        gym.logger.set_level(logging.CRITICAL)
-        if not path:
-            from huggingface_hub import snapshot_download
-            path = snapshot_download(repo_id="chengzl18/ligent-windows", cache_dir='.game_client')
+    def __init__(self, path: str) -> None:
+        gym.logger.set_level(logging.CRITICAL)          
         unity_env = UnityEnvironment(path, no_graphics=False)
         self.env = UnityToGymWrapper(
             unity_env,
