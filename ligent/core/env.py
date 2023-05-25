@@ -20,7 +20,7 @@ class Environment:
         )
 
     def reset(self):
-        return self.env.reset()
+        return unpack_observation(self.env.reset())
 
     def step(
         self,

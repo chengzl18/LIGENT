@@ -1,7 +1,8 @@
 from ligent.server.scene_generator import load_prefabs, generate_scene
 from ligent.mlagents_envs.environment import UnityEnvironment
 from ligent.utils import *
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
+import requests
 from multiprocessing import Process
 import subprocess
 import socket
@@ -17,9 +18,7 @@ app = Flask(__name__)
 def create_world():
     config = get_config()
     if "scenes_file" in config:
-        response = load_json(
-            os.path.join(config["scenes"], config["scenes_file"][config["scenes_id"]])
-        )
+        response = load_json(config["scenes_file"][config["scenes_id"]])
         config["scenes_id"] = (config["scenes_id"] + 1) % len(config["scenes_file"])
     else:
         response = generate_scene()
@@ -28,7 +27,8 @@ def create_world():
 
 @app.route("/config")
 def create_config():
-    config = init_config()
+    config = get_config()
+    log(f"request env config: {config}")
     response = {
         "id": config["id"],
         "time_scale": config["time_scale"],  # 20.0 is suitable for training
@@ -38,12 +38,45 @@ def create_config():
     return jsonify(response)
 
 
+@app.route("/set_scenes")
+def set_scenes():
+    scenes = request.args.get("scenes")
+    config = get_config()
+
+    if scenes:
+        try:
+            config["scenes"] = scenes
+            config["scenes_file"] = get_files_under(config["scenes"])
+            config["scenes_id"] = 0
+        except Exception:
+            raise
+            if "scenes_file" in config:
+                del config["scenes_file"]
+    else:
+        if "scenes_file" in config:
+            del config["scenes_file"]
+    return jsonify({"status": "ok"})
+
+
+# api provided for trainning code
+def set_scenes_dir(scene_files_dir: str = "") -> bool:
+    try:
+        response = requests.get(
+            f"http://localhost:{PORT_FOR_CLIENT}/set_scenes",
+            params={"scenes": scene_files_dir},
+        )
+        return json.loads(response.text)["status"] == "ok"
+    except Exception:
+        return False
+
+
 def get_files_under(path):
     files = [
         file
         for file in os.listdir(path)
         if not os.path.isdir(os.path.join(path, file)) and str(file).endswith(".json")
     ]
+    files = [os.path.join(config["scenes"], file) for file in sorted(files)]
     return files
 
 
@@ -55,6 +88,7 @@ DEFAULT_CONFIG = {
     "buffer_file": os.path.join(os.getcwd(), "game_states.json"),
 }
 
+
 def init_config():
     global config
     try:
@@ -62,7 +96,6 @@ def init_config():
         if config["scenes"]:
             config["scenes_file"] = get_files_under(config["scenes"])
             config["scenes_id"] = 0
-        log('request env config:',config)
     except Exception:
         config = DEFAULT_CONFIG
     return config
@@ -70,10 +103,9 @@ def init_config():
 
 def get_config():
     try:
-        print(config)
         return config
     except Exception:
-        return DEFAULT_CONFIG
+        return init_config()
 
 
 def serve():
@@ -104,7 +136,9 @@ def play_exec(executable_path, use_unity_env=False, skip_if_port_in_use=True):
     if use_unity_env:
         unity_env = UnityEnvironment(executable_path)
     else:
-        process = subprocess.Popen(os.path.join(executable_path))  # Launch the executable file
+        process = subprocess.Popen(
+            os.path.join(executable_path)
+        )  # Launch the executable file
 
     try:
         while True:

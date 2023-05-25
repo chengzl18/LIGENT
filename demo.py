@@ -35,7 +35,7 @@ try:
         # Model training here
 
         if done:
-            observation, info = env.reset()
+            vision_obs, language_obs = env.reset()
 except Exception as e:
     print("Exception:", e)
 finally:

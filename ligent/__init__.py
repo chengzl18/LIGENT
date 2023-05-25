@@ -1,4 +1,4 @@
-from ligent.server.server import serve, serve_fork
+from ligent.server.server import serve, serve_fork, set_scenes_dir
 from ligent.core.env import Environment
 from ligent.utils import *
 import argparse

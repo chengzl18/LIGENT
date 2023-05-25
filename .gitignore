@@ -167,4 +167,5 @@ release.py
 .game_client
 game_states.json
 saved_image
-demo2.py
+demo?.py
+results

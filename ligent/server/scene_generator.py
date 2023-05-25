@@ -370,4 +370,5 @@ def generate_scene():
 
 
 if __name__ == "__main__":
+    load_prefabs()
     print(generate_scene())
