@@ -358,7 +358,7 @@ def generate_scene():
     height = max(12, (max_z - min_z) * 1 + 2)
     center = [(min_x + max_x) / 2, height, (min_z + max_z) / 2]
     infos = {
-        "prompt": "test",
+        "prompt": "Come here, please.",
         "instances": instances,
         "player": player,
         "playmate": playmate,
@@ -370,5 +370,10 @@ def generate_scene():
 
 
 if __name__ == "__main__":
+    import os
     load_prefabs()
-    print(generate_scene())
+    os.makedirs("custom_scenes", exist_ok=True)
+
+    for i in range(5):
+        scene = generate_scene()
+        store_json(scene, f'custom_scenes/{i}.json')

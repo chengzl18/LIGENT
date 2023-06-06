@@ -20,7 +20,11 @@ class Environment:
         )
 
     def reset(self):
-        return unpack_observation(self.env.reset())
+        vision_obs, language_obs = unpack_observation(self.env.reset())
+        while language_obs == "[NOT_READY]":
+            observation, reward, done, info = self.env.step(pack_action())
+            vision_obs, language_obs = unpack_observation(observation)
+        return (vision_obs, language_obs)
 
     def step(
         self,
