@@ -9,6 +9,7 @@ import socket
 from colorama import Fore, Style
 import time
 import os
+from typing import Dict
 
 PORT_FOR_CLIENT = 9876
 app = Flask(__name__)
@@ -21,7 +22,8 @@ def create_world():
         response = load_json(config["scenes_file"][config["scenes_id"]])
         config["scenes_id"] = (config["scenes_id"] + 1) % len(config["scenes_file"])
     else:
-        response = generate_scene()
+        log(config["object_counts"])
+        response = generate_scene(config["object_counts"])
     return jsonify(response)
 
 
@@ -44,17 +46,20 @@ def set_scenes():
     config = get_config()
 
     if scenes:
-        try:
-            config["scenes"] = scenes
-            config["scenes_file"] = get_files_under(config["scenes"])
-            config["scenes_id"] = 0
-        except Exception:
-            raise
-            if "scenes_file" in config:
-                del config["scenes_file"]
+        config["scenes"] = scenes
+        config["scenes_file"] = get_files_under(config["scenes"])
+        config["scenes_id"] = 0
     else:
         if "scenes_file" in config:
             del config["scenes_file"]
+    return jsonify({"status": "ok"})
+
+
+@app.route("/set_object_counts")
+def set_object_counts():
+    object_counts = request.get_json().get("object_counts", {})
+    config = get_config()
+    config["object_counts"] = object_counts
     return jsonify({"status": "ok"})
 
 
@@ -64,6 +69,19 @@ def set_scenes_dir(scene_files_dir: str = "") -> bool:
         response = requests.get(
             f"http://localhost:{PORT_FOR_CLIENT}/set_scenes",
             params={"scenes": scene_files_dir},
+        )
+        return json.loads(response.text)["status"] == "ok"
+    except Exception:
+        return False
+    
+
+# api provided for trainning code
+def set_object_counts(object_counts: Dict[str, int]) -> bool:
+    try:
+        response = requests.get(
+            f"http://localhost:{PORT_FOR_CLIENT}/set_object_counts",
+            headers={'Content-Type': 'application/json'},
+            json={"object_counts": object_counts}
         )
         return json.loads(response.text)["status"] == "ok"
     except Exception:
@@ -86,6 +104,7 @@ DEFAULT_CONFIG = {
     "max_steps": 500,
     "scenes": "",
     "buffer_file": os.path.join(os.getcwd(), "game_states.json"),
+    "object_counts": {}
 }
 
 
@@ -113,8 +132,8 @@ def serve():
     import flask.cli
 
     flask.cli.show_server_banner = lambda *args: None
-    app.logger.disabled = True
-    logging.getLogger("werkzeug").disabled = True
+    #app.logger.disabled = True
+    #logging.getLogger("werkzeug").disabled = True
 
     load_prefabs()
     log(Fore.GREEN + "LIGENT server started" + Style.RESET_ALL)

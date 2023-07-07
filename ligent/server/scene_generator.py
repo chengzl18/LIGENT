@@ -3,6 +3,7 @@ from ligent.utils import *
 import numpy as np
 import json
 import pkg_resources
+from typing import Dict, Literal, Optional
 
 
 prefabs = None  # all the prefabs info, including name, size and center offset (for Unity transform position)
@@ -30,7 +31,9 @@ def load_prefabs() -> None:
     log("load prefabs info OK")
 
 
-def generate_scene():
+def generate_scene(object_counts: Dict[str, int]={}):
+    # object_counts specifies a definite number for certain objects
+    # For example, if you want to have only one instance of ChristmasTree_01 in the scene, you can set the object_counts as {"ChristmasTree_01": 1}.
     global prefabs, interactableNames, kinematicNames
     MAX = 7
     MID = MAX // 2
@@ -204,8 +207,6 @@ def generate_scene():
             area_range[2], area_range[3]
         )
 
-    y_base = 0 + prefabs["Floor_01"]["size"]["x"] / 2  # center + size / 2
-
     ### STEP 3: Randomly place the player and playmate (AI agent)
     # place the player
     while True:
@@ -251,95 +252,89 @@ def generate_scene():
     max_nums = {
         name: 10 for name in kinematicNames
     }  # Limit the maximum number of each type of object.
-    # create non-interactive objects
-    for i in range(10):
-        name = np.random.choice(kinematicNames)
-        if max_nums[name] == 0:
-            continue
-        max_nums[name] -= 1
-        x, z = random_xz_in_area_inner(eps=0.05)
-        x_size, y_size, z_size = (
-            prefabs[name]["size"]["x"],
-            prefabs[name]["size"]["y"],
-            prefabs[name]["size"]["z"],
+
+    def put_once(_name, _placer: RectPlacer, parent_idx, rand_method: Literal["eps", "fit"], return_bbox=False):
+        # Put _name in _placer on parent_idx
+
+        _x_size, _y_size, _z_size = (
+            prefabs[_name]["size"]["x"],
+            prefabs[_name]["size"]["y"],
+            prefabs[_name]["size"]["z"],
         )
-        bbox = (x - x_size / 2, z - z_size / 2, x + x_size / 2, z + z_size / 2)
-        ok = placer.place_rectangle(name, bbox=bbox)
+        if rand_method=="eps": # put at a fixed distance from the edge of the area
+            if _name in kinematicNames:
+                _x, _z = random_xz_in_area_inner(eps=0.05)
+            else:
+                _x, _z = random_xz_in_area_inner(eps=0.2) # Avoid generating small objects close to the wall
+        elif rand_method=="fit": # put exactly inside the area
+            _bbox = _placer.bbox
+            _x_min, _x_max, _z_min, _z_max = _bbox[0], _bbox[2], _bbox[1], _bbox[3]
+            try:
+                # eps will be dynamically determined based on the size of the object
+                # TODO: all previous eps related logic follow this approach.
+                _x, _z = np.random.uniform(
+                    _x_min + _x_size / 2, _x_max - _x_size / 2
+                ), np.random.uniform(_z_min + _z_size / 2, _z_max - _z_size / 2)
+            except:  # the right range may be smaller than the left range. unable to place.
+                return False
+        _bbox = (_x - _x_size / 2, _z - _z_size / 2, _x + _x_size / 2, _z + _z_size / 2)
+        ok = _placer.place_rectangle(_name, bbox=_bbox)
+        if parent_idx == 0:
+            _y_base = 0 + prefabs["Floor_01"]["size"]["y"] / 2   # center + size / 2
+        else:
+            parent_info = object_instances[parent_idx-len(floor_instances)]
+            _y_base = parent_info["position"][1] + prefabs[parent_info["prefab"]]["size"]["y"]/2
         if ok:
-            y = y_base + y_size / 2
-            y_base2 = y_base + y_size
+            _y = _y_base + _y_size / 2
             object_instances.append(
                 {
                     "prefab": name,
-                    "position": [x, y, z],
+                    "position": [_x, _y, _z],
                     "rotation": [0, 0, 0],
                     "scale": [1, 1, 1],
-                    "parent": 0,  # 0 represents the floor
+                    "parent": parent_idx, # 0 represents the floor
                 }
             )
+        if return_bbox:
+            return ok, _bbox
+        return ok
+    
+    def put_one(_name, _placer: RectPlacer, parent_idx, rand_method: Literal["eps", "fit"], return_bbox=False):
+        ok = False
+        while not ok:
+            ok, _bbox = put_once(_name, _placer, parent_idx, rand_method, True)
+        if return_bbox:
+            return True, _bbox
+        return True
+    
+    # generate objects with a specified number
+    for name in object_counts:
+        for i in range(object_counts[name]):
+            put_one(name, placer, 0, "eps")
+    random_kinematic_names = [name for name in kinematicNames if name not in object_counts]
+    random_interactable_names = [name for name in interactableNames if name not in object_counts]
+
+    # create non-interactive objects
+    for i in range(10):
+        name = np.random.choice(random_kinematic_names)
+        if max_nums[name] == 0:
+            continue
+        max_nums[name] -= 1
+        ok, bbox = put_once(name, placer, 0, "eps", return_bbox=True)
+        if ok:
             parent_idx = len(floor_instances) + len(object_instances) - 1
             # Generate some objects on this non-interactive object (such as a table).
             # bbox represent the range of the tabletop
             subplacer = RectPlacer(bbox=bbox)
             sub_object_nums = 10 if sum([n in name for n in {"Table", "Catpet"}]) else 0
             for i in range(sub_object_nums):
-                name = np.random.choice(interactableNames)
-                x_size, z_size = prefabs[name]["size"]["x"], prefabs[name]["size"]["z"]
-                x_min, x_max, z_min, z_max = bbox[0], bbox[2], bbox[1], bbox[3]
-                try:
-                    # eps will be dynamically determined based on the size of the object
-                    # TODO: all previous eps related logic follow this approach.
-                    x, z = np.random.uniform(
-                        x_min + x_size / 2, x_max - x_size / 2
-                    ), np.random.uniform(z_min + z_size / 2, z_max - z_size / 2)
-                except:  # the right range may be smaller than the left range. unable to place.
-                    continue
-                sub_bbox = (
-                    x - x_size / 2,
-                    z - z_size / 2,
-                    x + x_size / 2,
-                    z + z_size / 2,
-                )
-                ok = subplacer.place_rectangle(name, bbox=sub_bbox)
-                if ok:
-                    y = y_base2 + y_size / 2
-                    object_instances.append(
-                        {
-                            "prefab": name,
-                            "position": [x, y, z],
-                            "rotation": [0, 0, 0],
-                            "scale": [1, 1, 1],
-                            "parent": parent_idx,
-                        }
-                    )
+                name = np.random.choice(random_interactable_names)
+                put_once(name, subplacer, parent_idx, "fit")
 
     # create interactive objects
     for i in range(20):
-        name = np.random.choice(interactableNames)
-        x, z = random_xz_in_area_inner(eps=0.2)
-        x_size, y_size, z_size = (
-            prefabs[name]["size"]["x"],
-            prefabs[name]["size"]["y"],
-            prefabs[name]["size"]["z"],
-        )
-        bbox = (
-            x - x_size / 2,
-            z - z_size / 2,
-            x + x_size / 2,
-            z + z_size / 2,
-        )
-        ok = placer.place_rectangle(name, bbox=bbox)
-        if ok:
-            y = y_base + y_size / 2
-            object_instances.append(
-                {
-                    "prefab": name,
-                    "position": [x, y, z],
-                    "rotation": [0, 0, 0],
-                    "scale": [1, 1, 1],
-                    "parent": 0,
-                }
-            )
+        name = np.random.choice(random_interactable_names)
+        put_once(name, placer, 0, "eps")
 
     ### STEP 5: Adjust Positions for Unity GameObject
     # Convert all the positions (the center of the mesh bounding box) to positions of Unity GameObject transform
@@ -358,7 +353,7 @@ def generate_scene():
     height = max(12, (max_z - min_z) * 1 + 2)
     center = [(min_x + max_x) / 2, height, (min_z + max_z) / 2]
     infos = {
-        "prompt": "Come here, please.",
+        "prompt": "",
         "instances": instances,
         "player": player,
         "playmate": playmate,

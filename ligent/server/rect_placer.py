@@ -8,6 +8,7 @@ class RectPlacer:
         Args:
             bbox (Tuple[float, float, float, float]): (xmin, ymin, xmax, ymax)
         """
+        self.bbox = bbox
         self.spindex = Index(bbox=bbox)
 
     def place_rectangle(self, name:str, bbox:Tuple[float, float, float, float])->bool:
