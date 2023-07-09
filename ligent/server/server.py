@@ -117,6 +117,7 @@ def init_config():
             config["scenes_id"] = 0
     except Exception:
         config = DEFAULT_CONFIG
+    config["object_counts"] = {}
     return config
 
 
